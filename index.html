@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>FX Signal Desk (Live)</title>
+<style>
+:root{--bg:#f4f5f7;--cd:#fff;--tx:#14181f;--mu:#6b7380;--bd:#e2e5ea;--g:#0f9d58;--r:#d93025;--y:#b7791f;--ac:#2563eb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1116;--cd:#171b22;--tx:#e8ebf0;--mu:#8b94a3;--bd:#262c36;--g:#34c77b;--r:#ff6b60;--y:#e0a94a;--ac:#6ea0ff}}
+:root[data-theme="dark"]{--bg:#0e1116;--cd:#171b22;--tx:#e8ebf0;--mu:#8b94a3;--bd:#262c36;--g:#34c77b;--r:#ff6b60;--y:#e0a94a;--ac:#6ea0ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:14px}
+h1{font-size:18px;margin:0 0 10px}h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin:20px 0 8px}
+.cd{background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:10px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+.chip{border:1px solid var(--bd);background:var(--cd);color:var(--tx);border-radius:99px;padding:6px 12px;font:inherit;white-space:nowrap;cursor:pointer}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.sig{font-size:42px;font-weight:800;line-height:1.1}
+.BUY{color:var(--g)}.SELL{color:var(--r)}.WAIT{color:var(--y)}
+.mu{color:var(--mu);font-size:13px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--bd)}
+button.b{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer}
+button.s{background:transparent;color:var(--ac);border:1px solid var(--bd);padding:5px 10px;font-size:13px}
+input{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:10px;padding:9px;font:inherit}
+.warn{background:rgba(183,121,31,.12);border:1px solid var(--y);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}.grid b{display:block;font-size:22px}
+</style></head><body><main>
+<h1>📈 FX Signal Desk · Live</h1><div id="chips" class="chips"></div><div id="app"></div>
+<p class="mu">Educational tool, not financial advice. No indicator system can guarantee a win rate. Trust your logged results over any percentage.</p>
+</main><script>
+const PAIRS=['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD'],MS={'5min':3e5,'15min':9e5,'1h':36e5};
+const $=id=>document.getElementById(id);
+let S={key:'',tf:'15min',trades:[],calls:{}},D={},F={},cur='EUR/USD',msg='',busy=false;
+try{Object.assign(S,JSON.parse(localStorage.getItem('fxlive')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('fxlive',JSON.stringify(S))}catch(e){}};
+const pip=p=>p.includes('JPY')?.01:.0001,dp=p=>p.includes('JPY')?3:5;
+function ema(a,p){const k=2/(p+1),o=[a[0]];for(let i=1;i<a.length;i++)o.push(a[i]*k+o[i-1]*(1-k));return o}
+function rsi(a,n=14){const o=Array(a.length).fill(50);let g=0,l=0;for(let i=1;i<a.length;i++){const d=a[i]-a[i-1],u=Math.max(d,0),w=Math.max(-d,0);if(i<=n){g+=u/n;l+=w/n}else{g=(g*(n-1)+u)/n;l=(l*(n-1)+w)/n}if(i>=n)o[i]=l==0?100:100-100/(1+g/l)}return o}
+function adx(a,n=14){const o=Array(a.length).fill(0);let tr=0,p=0,m=0,dx=[],ax=0;for(let i=1;i<a.length;i++){const u=a[i].h-a[i-1].h,d=a[i-1].l-a[i].l,t=Math.max(a[i].h-a[i].l,Math.abs(a[i].h-a[i-1].c),Math.abs(a[i].l-a[i-1].c)),P=u>d&&u>0?u:0,M=d>u&&d>0?d:0;if(i<=n){tr+=t;p+=P;m+=M}else{tr+=t-tr/n;p+=P-p/n;m+=M-m/n}if(i>=n){const pi=100*p/(tr||1),mi=100*m/(tr||1),x=100*Math.abs(pi-mi)/((pi+mi)||1);if(dx.length<n){dx.push(x);ax=dx.reduce((q,y)=>q+y,0)/dx.length}else ax=(ax*(n-1)+x)/n;o[i]=ax}}return o}
+function ind(c){const a=c.map(x=>x.c),e12=ema(a,12),e26=ema(a,26),l=e12.map((x,i)=>x-e26[i]),g=ema(l,9);return{a,e20:ema(a,20),e50:ema(a,50),e100:ema(a,100),h:l.map((x,i)=>x-g[i]),r:rsi(a),x:adx(c)}}
+function sc(I,i){const a=I.a,w=[];let s=0;const t=(c,y,n)=>{s+=c?1:-1;w.push((c?'＋ ':'－ ')+(c?y:n))};
+t(I.e20[i]>I.e50[i],'Short-term trend above long-term (EMA20 &gt; EMA50)','Short-term trend below long-term (EMA20 &lt; EMA50)');
+t(a[i]>I.e50[i],'Price above EMA50','Price below EMA50');
+t(I.h[i]>0,'MACD momentum positive','MACD momentum negative');
+const r=I.r[i],R='RSI '+r.toFixed(0);
+if(r>=70){s--;w.push('－ '+R+' overbought')}else if(r<=30){s++;w.push('＋ '+R+' oversold')}else t(r>50,R+' leaning bullish',R+' leaning bearish');
+const x=I.x[i];let sg='WAIT';
+if(Math.abs(s)>=2){if(x<20)w.push('⚠ Skipped: market is ranging (ADX '+x.toFixed(0)+', needs 20+)');else if((s>0)!=(a[i]>I.e100[i]))w.push('⚠ Skipped: goes against the bigger trend (EMA100)');else sg=s>0?'BUY':'SELL'}
+return{s,w,sg}}
+const atr=(a,e=a.length)=>{const x=a.slice(e-15,e);let t=0;for(let i=1;i<x.length;i++)t+=Math.max(x[i].h-x[i].l,Math.abs(x[i].h-x[i-1].c),Math.abs(x[i].l-x[i-1].c));return t/14};
+function bt(c,I){let n=0,w=0,R=0,i=100;while(i<c.length-2){const sg=sc(I,i).sg;if(sg=='WAIT'){i++;continue}const v=atr(c,i+1),b=sg=='BUY',e=c[i].c,sl=b?e-1.5*v:e+1.5*v,tp=b?e+2.25*v:e-2.25*v;let r=0,j=i+1;for(;j<c.length;j++){if(b?c[j].l<=sl:c[j].h>=sl){r=-1;break}if(b?c[j].h>=tp:c[j].l<=tp){r=1.5;break}}if(!r)break;n++;if(r>0)w++;R+=r;i=j+1}return{n,w:n?w/n:0,e:n?R/n:0}}
+function stats(p){const c=S.trades.filter(t=>t.st!='open'&&(!p||t.pair==p));return{n:c.length,w:c.filter(t=>t.st=='win').length,p:c.reduce((x,t)=>x+t.pips,0)}}
+function fin(t,x){t.ex=x;t.pips=(x-t.en)*(t.dir=='BUY'?1:-1)/pip(t.pair);t.st=t.pips>0?'win':'loss'}
+function chk(p){D[p]&&S.trades.filter(t=>t.st=='open'&&t.pair==p).forEach(t=>{const b=t.dir=='BUY';for(const c of D[p]){if(c.t<=t.ct)continue;if(b?c.l<=t.sl:c.h>=t.sl){fin(t,t.sl);break}if(b?c.h>=t.tp:c.l<=t.tp){fin(t,t.tp);break}}});save()}
+function alertIf(p){const c=sc(ind(D[p]),D[p].length-1).sg,o=S.calls[p];S.calls[p]=c;save();
+if(o&&o!=c&&c!='WAIT'){msg=`New ${c} signal on ${p}`;try{if(Notification.permission=='granted')new Notification('FX signal: '+c+' '+p)}catch(e){}}}
+async function pull(p){try{const r=await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(p)}&interval=${S.tf}&outputsize=1000&timezone=UTC&apikey=${encodeURIComponent(S.key)}`),j=await r.json();
+if(j.status=='error'||!j.values)throw new Error(j.message||'No data returned');
+D[p]=j.values.slice().reverse().map(v=>({t:Date.parse(v.datetime.replace(' ','T')+'Z'),o:+v.open,h:+v.high,l:+v.low,c:+v.close}));
+F[p]=Date.now();chk(p);alertIf(p)}catch(e){msg=p+': '+e.message}}
+async function tick(force){if(busy||!S.key)return;busy=true;render();for(const p of PAIRS)if(force===true||!F[p]||Date.now()-F[p]>(p==cur?3e5:9e5))await pull(p);busy=false;render()}
+setInterval(tick,60000);
+function take(dir){const a=D[cur],k=a[a.length-1],v=atr(a),g=dir=='BUY'?1:-1;S.trades.push({id:Date.now(),pair:cur,dir,en:k.c,ct:k.t,sl:k.c-g*v*1.5,tp:k.c+g*v*2.25,st:'open'});save();msg='Trade logged. It closes automatically when price hits the stop or target.';render()}
+function closeT(id){const t=S.trades.find(x=>x.id==id),a=D[t.pair];fin(t,a[a.length-1].c);save();render()}
+function setk(){const k=$('k').value.trim();if(!k)return;S.key=k;save();tick(true)}
+function setTf(t){S.tf=t;D={};F={};S.calls={};save();tick(true)}
+function alerts(){try{Notification.requestPermission().then(p=>{msg='Browser alerts: '+p;render()})}catch(e){msg='Alerts are not supported in this browser.';render()}}
+function render(){
+if(!S.key){$('chips').innerHTML='';$('app').innerHTML=(msg?`<div class="warn">${msg}</div>`:'')+`<div class="cd"><b>Connect live data</b><p class="mu">Create a free key at twelvedata.com (no card needed), then paste it here. It is stored only in this browser.</p><input id="k" placeholder="Twelve Data API key"><button class="b" style="margin-top:8px;width:100%" onclick="setk()">Connect</button></div>`;msg='';return}
+$('chips').innerHTML=PAIRS.map(p=>`<button class="chip ${p==cur?'on':''}" onclick="cur='${p}';render()">${p}</button>`).join('')+'<span style="width:8px"></span>'+Object.keys(MS).map(t=>`<button class="chip ${t==S.tf?'on':''}" onclick="setTf('${t}')">${t}</button>`).join('');
+let h=msg?`<div class="warn">${msg}</div>`:'';msg='';const a=D[cur];
+if(!a){$('app').innerHTML=h+`<div class="cd mu">${busy?'Loading live prices…':'No data yet.'} <button class="b s" onclick="tick(true)">Retry</button> <button class="b s" onclick="S.key='';save();render()">Change key</button></div>`;return}
+const I=ind(a),cl=I.a,i=cl.length-1,{s,w,sg}=sc(I,i),l=cl[i],v=atr(a),g=s>0?1:-1,d=dp(cur),b=bt(a,I),my=stats(cur),age=Date.now()-a[i].t;
+if(age>MS[S.tf]*3)h+=`<div class="warn">Latest candle is ${(age/36e5).toFixed(1)}h old. The market may be closed (forex pauses on weekends), so this signal is stale.</div>`;
+h+=`<div class="cd"><div class="mu">${cur} · ${l.toFixed(d)} · updated ${F[cur]?new Date(F[cur]).toLocaleTimeString():'–'}${busy?' · refreshing…':''}</div><div class="sig ${sg}">${sg}</div>
+<div class="mu">${s==0?'Indicators split 2 vs 2':(4+Math.abs(s))/2+' of 4 indicators '+(s>0?'bullish':'bearish')}</div>
+<div style="margin:10px 0">${w.map(x=>`<div class="mu">${x}</div>`).join('')}</div>
+${sg!='WAIT'?`<div class="row"><span>Entry</span><b>${l.toFixed(d)}</b></div><div class="row"><span>Stop loss</span><b>${(l-g*v*1.5).toFixed(d)}</b></div><div class="row"><span>Take profit</span><b>${(l+g*v*2.25).toFixed(d)}</b></div>`:''}
+<div class="row"><span>Backtest win rate*</span><b>${b.n?Math.round(b.w*100)+'% ('+b.n+' trades)':'n/a'}</b></div>
+<div class="row"><span>Backtest avg result*</span><b>${b.n?(b.e>=0?'+':'')+b.e.toFixed(2)+'R per trade':'n/a'}</b></div>
+<div class="mu" style="padding:6px 0">${b.n<20?'Too few backtest trades to judge yet.':b.e>0.05?'Backtest is positive on this data.':'Backtest is flat or negative on this data. Be cautious.'}</div>
+<div class="row"><span>Your logged ${cur} trades</span><b>${my.n?Math.round(my.w/my.n*100)+'% (n='+my.n+')':'none yet'}</b></div>
+${sg!='WAIT'?`<button class="b" style="margin-top:10px;width:100%" onclick="take('${sg}')">I took this trade</button>`:''}
+<div class="mu" style="margin-top:8px">*Same rules and same stop/target replayed on the last ${cl.length} candles, one trade at a time. 1R = the stop distance. With these stops you need over 40% wins to break even. Small samples can mislead.</div></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="b s" onclick="tick(true)">Refresh now</button><button class="b s" onclick="alerts()">Enable alerts</button><button class="b s" onclick="S.key='';save();render()">Change key</button></div>
+<h2>Market watch</h2><div class="cd">`+PAIRS.map(p=>{const x=D[p],r=x?sc(ind(x),x.length-1).sg:'…';return`<div class="row" style="cursor:pointer" onclick="cur='${p}';render()"><span>${p}</span><b class="${r}">${r}</b></div>`}).join('')+`</div>`;
+const op=S.trades.filter(t=>t.st=='open'),cs=S.trades.filter(t=>t.st!='open').reverse(),st=stats();
+h+=`<h2>Trade journal</h2><div class="cd"><div class="grid"><div><b>${st.n}</b><span class="mu">closed</span></div><div><b>${st.n?Math.round(st.w/st.n*100)+'%':'–'}</b><span class="mu">win rate</span></div><div><b class="${st.p>=0?'BUY':'SELL'}">${st.p.toFixed(1)}</b><span class="mu">net pips</span></div></div></div>`;
+if(op.length)h+=`<div class="cd"><div class="mu">Open trades</div>`+op.map(t=>`<div class="row"><span><b class="${t.dir}">${t.dir}</b> ${t.pair} @ ${t.en.toFixed(dp(t.pair))}<br><span class="mu">SL ${t.sl.toFixed(dp(t.pair))} · TP ${t.tp.toFixed(dp(t.pair))}</span></span><button class="b s" onclick="closeT(${t.id})">Close now</button></div>`).join('')+`</div>`;
+if(cs.length)h+=`<div class="cd"><div class="mu">Closed trades</div>`+cs.slice(0,10).map(t=>`<div class="row"><span>${t.dir} ${t.pair}<br><span class="mu">${t.st}</span></span><b class="${t.pips>=0?'BUY':'SELL'}">${t.pips>=0?'+':''}${t.pips.toFixed(1)} pips</b></div>`).join('')+`</div>`;
+$('app').innerHTML=h}
+render();tick(true);
+</script></body></html>
