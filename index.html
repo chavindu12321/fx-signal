@@ -44,9 +44,10 @@ const x=I.x[i];let sg='WAIT';
 if(Math.abs(s)>=2){if(x<20)w.push('⚠ Skipped: market is ranging (ADX '+x.toFixed(0)+', needs 20+)');else if((s>0)!=(a[i]>I.e100[i]))w.push('⚠ Skipped: goes against the bigger trend (EMA100)');else sg=s>0?'BUY':'SELL'}
 return{s,w,sg}}
 const atr=(a,e=a.length)=>{const x=a.slice(e-15,e);let t=0;for(let i=1;i<x.length;i++)t+=Math.max(x[i].h-x[i].l,Math.abs(x[i].h-x[i-1].c),Math.abs(x[i].l-x[i-1].c));return t/14};
-function bt(c,I){let n=0,w=0,R=0,i=100;while(i<c.length-2){const sg=sc(I,i).sg;if(sg=='WAIT'){i++;continue}const v=atr(c,i+1),b=sg=='BUY',e=c[i].c,sl=b?e-1.5*v:e+1.5*v,tp=b?e+2.25*v:e-2.25*v;let r=0,j=i+1;for(;j<c.length;j++){if(b?c[j].l<=sl:c[j].h>=sl){r=-1;break}if(b?c[j].h>=tp:c[j].l<=tp){r=1.5;break}}if(!r)break;n++;if(r>0)w++;R+=r;i=j+1}return{n,w:n?w/n:0,e:n?R/n:0}}
+const SP={'EUR/USD':1,'GBP/USD':1.5,'USD/JPY':1.2,'AUD/USD':1.4,'USD/CAD':1.8};
+function bt(c,I,p){let n=0,w=0,R=0,B=0,i=100;while(i<c.length-2){const sg=sc(I,i).sg;if(sg=='WAIT'){i++;continue}const v=atr(c,i+1),k=SP[p]*pip(p)/(1.5*v),b=sg=='BUY',e=c[i].c,sl=b?e-1.5*v:e+1.5*v,tp=b?e+2.25*v:e-2.25*v;let r=0,j=i+1;for(;j<c.length;j++){if(b?c[j].l<=sl:c[j].h>=sl){r=-1-k;break}if(b?c[j].h>=tp:c[j].l<=tp){r=1.5-k;break}}if(!r)break;n++;if(r>0)w++;R+=r;B+=(1+k)/2.5;i=j+1}return{n,w:n?w/n:0,e:n?R/n:0,be:n?B/n:.4}}
 function stats(p){const c=S.trades.filter(t=>t.st!='open'&&(!p||t.pair==p));return{n:c.length,w:c.filter(t=>t.st=='win').length,p:c.reduce((x,t)=>x+t.pips,0)}}
-function fin(t,x){t.ex=x;t.pips=(x-t.en)*(t.dir=='BUY'?1:-1)/pip(t.pair);t.st=t.pips>0?'win':'loss'}
+function fin(t,x){t.ex=x;t.pips=(x-t.en)*(t.dir=='BUY'?1:-1)/pip(t.pair)-(SP[t.pair]||1);t.st=t.pips>0?'win':'loss'}
 function chk(p){D[p]&&S.trades.filter(t=>t.st=='open'&&t.pair==p).forEach(t=>{const b=t.dir=='BUY';for(const c of D[p]){if(c.t<=t.ct)continue;if(b?c.l<=t.sl:c.h>=t.sl){fin(t,t.sl);break}if(b?c.h>=t.tp:c.l<=t.tp){fin(t,t.tp);break}}});save()}
 function alertIf(p){const c=sc(ind(D[p]),D[p].length-1).sg,o=S.calls[p];S.calls[p]=c;save();
 if(o&&o!=c&&c!='WAIT'){msg=`New ${c} signal on ${p}`;try{if(Notification.permission=='granted')new Notification('FX signal: '+c+' '+p)}catch(e){}}}
@@ -66,22 +67,23 @@ if(!S.key){$('chips').innerHTML='';$('app').innerHTML=(msg?`<div class="warn">${
 $('chips').innerHTML=PAIRS.map(p=>`<button class="chip ${p==cur?'on':''}" onclick="cur='${p}';render()">${p}</button>`).join('')+'<span style="width:8px"></span>'+Object.keys(MS).map(t=>`<button class="chip ${t==S.tf?'on':''}" onclick="setTf('${t}')">${t}</button>`).join('');
 let h=msg?`<div class="warn">${msg}</div>`:'';msg='';const a=D[cur];
 if(!a){$('app').innerHTML=h+`<div class="cd mu">${busy?'Loading live prices…':'No data yet.'} <button class="b s" onclick="tick(true)">Retry</button> <button class="b s" onclick="S.key='';save();render()">Change key</button></div>`;return}
-const I=ind(a),cl=I.a,i=cl.length-1,{s,w,sg}=sc(I,i),l=cl[i],v=atr(a),g=s>0?1:-1,d=dp(cur),b=bt(a,I),my=stats(cur),age=Date.now()-a[i].t;
+const I=ind(a),cl=I.a,i=cl.length-1,{s,w,sg}=sc(I,i),l=cl[i],v=atr(a),g=s>0?1:-1,d=dp(cur),b=bt(a,I,cur),my=stats(cur),age=Date.now()-a[i].t;
 if(age>MS[S.tf]*3)h+=`<div class="warn">Latest candle is ${(age/36e5).toFixed(1)}h old. The market may be closed (forex pauses on weekends), so this signal is stale.</div>`;
 h+=`<div class="cd"><div class="mu">${cur} · ${l.toFixed(d)} · updated ${F[cur]?new Date(F[cur]).toLocaleTimeString():'–'}${busy?' · refreshing…':''}</div><div class="sig ${sg}">${sg}</div>
 <div class="mu">${s==0?'Indicators split 2 vs 2':(4+Math.abs(s))/2+' of 4 indicators '+(s>0?'bullish':'bearish')}</div>
 <div style="margin:10px 0">${w.map(x=>`<div class="mu">${x}</div>`).join('')}</div>
 ${sg!='WAIT'?`<div class="row"><span>Entry</span><b>${l.toFixed(d)}</b></div><div class="row"><span>Stop loss</span><b>${(l-g*v*1.5).toFixed(d)}</b></div><div class="row"><span>Take profit</span><b>${(l+g*v*2.25).toFixed(d)}</b></div>`:''}
 <div class="row"><span>Backtest win rate*</span><b>${b.n?Math.round(b.w*100)+'% ('+b.n+' trades)':'n/a'}</b></div>
+<div class="row"><span>Needed to break even*</span><b>${Math.round(b.be*100)}%</b></div>
 <div class="row"><span>Backtest avg result*</span><b>${b.n?(b.e>=0?'+':'')+b.e.toFixed(2)+'R per trade':'n/a'}</b></div>
-<div class="mu" style="padding:6px 0">${b.n<20?'Too few backtest trades to judge yet.':b.e>0.05?'Backtest is positive on this data.':'Backtest is flat or negative on this data. Be cautious.'}</div>
+<div class="mu" style="padding:6px 0">${b.n<30?'Too few backtest trades to judge yet.':b.w>b.be+2*Math.sqrt(b.w*(1-b.w)/b.n)?'Beats costs with decent confidence on this data. Still no guarantee.':b.w>b.be?'Slightly above break-even, but within the range of luck. No proven edge.':'Below break-even after costs. This setup lost money on this data.'}</div>
 <div class="row"><span>Your logged ${cur} trades</span><b>${my.n?Math.round(my.w/my.n*100)+'% (n='+my.n+')':'none yet'}</b></div>
 ${sg!='WAIT'?`<button class="b" style="margin-top:10px;width:100%" onclick="take('${sg}')">I took this trade</button>`:''}
-<div class="mu" style="margin-top:8px">*Same rules and same stop/target replayed on the last ${cl.length} candles, one trade at a time. 1R = the stop distance. With these stops you need over 40% wins to break even. Small samples can mislead.</div></div>
+<div class="mu" style="margin-top:8px">*Same rules and stops replayed on the last ${cl.length} candles, one trade at a time, including a typical ${SP[cur]}-pip spread cost (your broker's may differ). 1R = the stop distance. Small samples can mislead.</div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="b s" onclick="tick(true)">Refresh now</button><button class="b s" onclick="alerts()">Enable alerts</button><button class="b s" onclick="S.key='';save();render()">Change key</button></div>
 <h2>Market watch</h2><div class="cd">`+PAIRS.map(p=>{const x=D[p],r=x?sc(ind(x),x.length-1).sg:'…';return`<div class="row" style="cursor:pointer" onclick="cur='${p}';render()"><span>${p}</span><b class="${r}">${r}</b></div>`}).join('')+`</div>`;
 const op=S.trades.filter(t=>t.st=='open'),cs=S.trades.filter(t=>t.st!='open').reverse(),st=stats();
-h+=`<h2>Trade journal</h2><div class="cd"><div class="grid"><div><b>${st.n}</b><span class="mu">closed</span></div><div><b>${st.n?Math.round(st.w/st.n*100)+'%':'–'}</b><span class="mu">win rate</span></div><div><b class="${st.p>=0?'BUY':'SELL'}">${st.p.toFixed(1)}</b><span class="mu">net pips</span></div></div></div>`;
+h+=`<h2>Trade journal</h2><div class="cd"><div class="grid"><div><b>${st.n}</b><span class="mu">closed</span></div><div><b>${st.n?Math.round(st.w/st.n*100)+'%':'–'}</b><span class="mu">win rate</span></div><div><b class="${st.p>=0?'BUY':'SELL'}">${st.p.toFixed(1)}</b><span class="mu">net pips after spread</span></div></div></div>`;
 if(op.length)h+=`<div class="cd"><div class="mu">Open trades</div>`+op.map(t=>`<div class="row"><span><b class="${t.dir}">${t.dir}</b> ${t.pair} @ ${t.en.toFixed(dp(t.pair))}<br><span class="mu">SL ${t.sl.toFixed(dp(t.pair))} · TP ${t.tp.toFixed(dp(t.pair))}</span></span><button class="b s" onclick="closeT(${t.id})">Close now</button></div>`).join('')+`</div>`;
 if(cs.length)h+=`<div class="cd"><div class="mu">Closed trades</div>`+cs.slice(0,10).map(t=>`<div class="row"><span>${t.dir} ${t.pair}<br><span class="mu">${t.st}</span></span><b class="${t.pips>=0?'BUY':'SELL'}">${t.pips>=0?'+':''}${t.pips.toFixed(1)} pips</b></div>`).join('')+`</div>`;
 $('app').innerHTML=h}
