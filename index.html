@@ -24,7 +24,7 @@ input{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--bd)
 <h1>📈 FX Signal Desk · Live</h1><div id="chips" class="chips"></div><div id="app"></div>
 <p class="mu">Educational tool, not financial advice. No indicator system can guarantee a win rate. Trust your logged results over any percentage.</p>
 </main><script>
-const PAIRS=['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD'],MS={'5min':3e5,'15min':9e5,'1h':36e5};
+const PAIRS=['EUR/USD','GBP/USD','USD/JPY','AUD/USD','USD/CAD'],MS={'5min':3e5,'15min':9e5,'30min':18e5,'1h':36e5,'4h':144e5,'1day':864e5};
 const $=id=>document.getElementById(id);
 let S={key:'',tf:'15min',trades:[],calls:{}},D={},F={},cur='EUR/USD',msg='',busy=false;
 try{Object.assign(S,JSON.parse(localStorage.getItem('fxlive')||'{}'))}catch(e){}
@@ -53,9 +53,9 @@ function alertIf(p){const c=sc(ind(D[p]),D[p].length-1).sg,o=S.calls[p];S.calls[
 if(o&&o!=c&&c!='WAIT'){msg=`New ${c} signal on ${p}`;try{if(Notification.permission=='granted')new Notification('FX signal: '+c+' '+p)}catch(e){}}}
 async function pull(p){try{const r=await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(p)}&interval=${S.tf}&outputsize=1000&timezone=UTC&apikey=${encodeURIComponent(S.key)}`),j=await r.json();
 if(j.status=='error'||!j.values)throw new Error(j.message||'No data returned');
-D[p]=j.values.slice().reverse().map(v=>({t:Date.parse(v.datetime.replace(' ','T')+'Z'),o:+v.open,h:+v.high,l:+v.low,c:+v.close}));
+D[p]=j.values.slice().reverse().map(v=>({t:Date.parse((v.datetime.length<11?v.datetime+'T00:00:00':v.datetime.replace(' ','T'))+'Z'),o:+v.open,h:+v.high,l:+v.low,c:+v.close}));
 F[p]=Date.now();chk(p);alertIf(p)}catch(e){msg=p+': '+e.message}}
-async function tick(force){if(busy||!S.key)return;busy=true;render();for(const p of PAIRS)if(force===true||!F[p]||Date.now()-F[p]>(p==cur?3e5:9e5))await pull(p);busy=false;render()}
+async function tick(force){if(busy||!S.key)return;busy=true;render();for(const p of PAIRS)if(force===true||!F[p]||Date.now()-F[p]>(p==cur?Math.max(3e5,MS[S.tf]/3):Math.max(9e5,MS[S.tf])))await pull(p);busy=false;render()}
 setInterval(tick,60000);
 function take(dir){const a=D[cur],k=a[a.length-1],v=atr(a),g=dir=='BUY'?1:-1;S.trades.push({id:Date.now(),pair:cur,dir,en:k.c,ct:k.t,sl:k.c-g*v*1.5,tp:k.c+g*v*2.25,st:'open'});save();msg='Trade logged. It closes automatically when price hits the stop or target.';render()}
 function closeT(id){const t=S.trades.find(x=>x.id==id),a=D[t.pair];fin(t,a[a.length-1].c);save();render()}
